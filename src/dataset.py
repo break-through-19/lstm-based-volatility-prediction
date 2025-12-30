@@ -13,10 +13,8 @@ def load_data(filepath):
         pd.DataFrame: Loaded dataframe with parsed dates.
     """
     df = pd.read_csv(filepath)
-    # Strip whitespace from column names just in case
     df.columns = df.columns.str.strip()
     
-    # Parse dates
     df['DATE'] = pd.to_datetime(df['DATE'], format='%m/%d/%Y')
     df = df.sort_values('DATE').reset_index(drop=True)
     return df
@@ -45,33 +43,24 @@ def create_sequences(data, seq_length):
     ys = []
     for i in range(len(data) - seq_length):
         x = data[i:(i + seq_length)]
-        y = data[i + seq_length] # Predict the next step
+        y = data[i + seq_length]
         xs.append(x)
         ys.append(y)
     return np.array(xs), np.array(ys)
 
-def preprocess_data(df, target_col='CLOSE', seq_length=60, train_split=0.8):
+def preprocess_data(df, target_cols=['OPEN', 'HIGH', 'LOW', 'CLOSE'], seq_length=60, train_split=0.8):
     """
     Preprocess data: normalize and split.
     Args:
         df (pd.DataFrame): Dataframe.
-        target_col (str): Column to predict.
+        target_cols (list): Columns to predict.
         seq_length (int): Window size.
         train_split (float): Split ratio.
     Returns:
         dict: Contains train_loader, val_loader, scaler, train/val datasets
     """
-    # Use only the target column for now (univariate prediction) as per plan
-    # or should we use all features? 
-    # The plan said "predict the CLOSE price based on the past N days".
-    # Usually for univariate, we just use the target column.
-    # But using OHLC to predict C might be better. 
-    # Let's start with Univariate based on "predict the CLOSE price". 
-    # Actually, often it's better to use multivariate. 
-    # I'll stick to the plan: "Predicted CLOSE price based on the past N days".
-    # I'll implement Univariate first to keep it simple as implied.
     
-    data = df[[target_col]].values
+    data = df[target_cols].values
     
     scaler = MinMaxScaler(feature_range=(0, 1))
     scaled_data = scaler.fit_transform(data)

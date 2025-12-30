@@ -26,7 +26,8 @@ def train_model():
         return
 
     df = load_data(FILEPATH)
-    data_dict = preprocess_data(df, target_col='CLOSE', seq_length=SEQ_LENGTH)
+    target_cols = ['OPEN', 'HIGH', 'LOW', 'CLOSE']
+    data_dict = preprocess_data(df, target_cols=target_cols, seq_length=SEQ_LENGTH)
     
     train_dataset = data_dict['train_dataset']
     val_dataset = data_dict['val_dataset']
@@ -36,7 +37,7 @@ def train_model():
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
     
     # Model Setup
-    model = LSTMModel(input_size=1, hidden_size=HIDDEN_SIZE, num_layers=NUM_LAYERS, output_size=1)
+    model = LSTMModel(input_size=4, hidden_size=HIDDEN_SIZE, num_layers=NUM_LAYERS, output_size=4)
     model = model.to(DEVICE)
     
     criterion = nn.MSELoss()
@@ -55,10 +56,6 @@ def train_model():
             X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
             
             # Reshape inputs for LSTM [batch, seq_len, features]
-            # dataset.py returns [batch, seq_len] if we didn't keep dims, let's check dataset.py
-            # in dataset.py: data is scaled_data which is (N, 1). 
-            # create_sequences returns xs which is (N-seq, seq, 1).
-            # So X_batch shape is [batch, seq, 1]. This is correct for LSTM input_size=1.
             
             optimizer.zero_grad()
             outputs = model(X_batch)
@@ -120,14 +117,20 @@ def train_model():
     preds_actual = scaler.inverse_transform(preds)
     actual_y = scaler.inverse_transform(y_val)
     
-    # Plot Actual vs Predicted
-    plt.figure(figsize=(12, 6))
-    plt.plot(actual_y, label='Actual VIX9D')
-    plt.plot(preds_actual, label='Predicted VIX9D')
-    plt.title('VIX9D Prediction (Validation Set)')
-    plt.xlabel('Time Steps')
-    plt.ylabel('VIX9D Close Price')
-    plt.legend()
+    # Plot Actual vs Predicted for all 4 features
+    features = ['Open', 'High', 'Low', 'Close']
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    axes = axes.flatten()
+    
+    for i, feature in enumerate(features):
+        axes[i].plot(actual_y[:, i], label=f'Actual {feature}')
+        axes[i].plot(preds_actual[:, i], label=f'Predicted {feature}')
+        axes[i].set_title(f'VIX9D {feature} Prediction')
+        axes[i].set_xlabel('Time Steps')
+        axes[i].set_ylabel('Price')
+        axes[i].legend()
+    
+    plt.tight_layout()
     plt.savefig('results/figures/prediction_results.png')
     print("Saved results/figures/prediction_results.png")
 
