@@ -36,12 +36,17 @@ The following hyperparameters were chosen based on initial experimentation to ba
 | **Num Layers** | 2 | Number of recurrent layers. |
 | **Dropout** | 0.2 | Probability of an element to be zeroed (regularization). |
 
-## Evaluation Metrics
-The model performance is evaluated on the validation set using the following metrics for each predicted feature:
+## Results
+The model was evaluated on the held-out validation set (20% of data). The performance metrics for each feature are as follows:
 
-1.  **Mean Absolute Error (MAE)**: Measures the average magnitude of the errors in a set of predictions, without considering their direction.
-2.  **Root Mean Squared Error (RMSE)**: Quadratic mean of the differences between observed data and the estimator. penalizes larger errors more than MAE.
-3.  **R-squared ($R^2$)**: Represents the proportion of the variance for a dependent variable that's explained by an independent variable. A score of 1.0 indicates a perfect prediction.
+| Feature | MAE | RMSE | $R^2$ Score |
+| :--- | :--- | :--- | :--- |
+| **Open** | 1.3663 | 2.9318 | 0.7603 |
+| **High** | 1.7741 | 3.3452 | 0.7730 |
+| **Low** | 1.2639 | 2.0568 | 0.8045 |
+| **Close** | 1.8193 | 2.9562 | 0.7193 |
+
+Visualizations of the loss history and prediction vs. actual plots are saved in the `results/figures/` directory.
 
 ## Directory Structure
 The project is modularized for better maintainability:
