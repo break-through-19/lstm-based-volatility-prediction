@@ -1,47 +1,57 @@
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 import os
-from dataset import load_data, preprocess_data
-from model import LSTMModel
+import numpy as np
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+try:
+    from dataset import load_data, preprocess_data
+    from model import LSTMModel
+    from visualization import plot_loss, plot_predictions
+except ImportError:
+    from src.dataset import load_data, preprocess_data
+    from src.model import LSTMModel
+    from src.visualization import plot_loss, plot_predictions
 
-def train_model():
-    # Configuration
-    FILEPATH = 'data/VIX9D_History-SP500.csv'
-    SEQ_LENGTH = 60
-    BATCH_SIZE = 32
-    EPOCHS = 10
-    LEARNING_RATE = 0.001
-    HIDDEN_SIZE = 50
-    NUM_LAYERS = 2
-    DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+def train_model(filepath='data/VIX9D_History-SP500.csv', 
+                seq_length=60, 
+                batch_size=32, 
+                epochs=10, 
+                learning_rate=0.001, 
+                hidden_size=50, 
+                num_layers=2,
+                output_size=4,
+                device=None):
     
-    print(f"Using device: {DEVICE}")
+    if device is None:
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
     
     # Load and preprocess data
-    if not os.path.exists(FILEPATH):
-        print(f"Error: File not found at {FILEPATH}")
-        return
+    if not os.path.exists(filepath):
+        print(f"Error: File not found at {filepath}")
+        return None, None, None, None, None, None, None
 
-    df = load_data(FILEPATH)
+    df = load_data(filepath)
     target_cols = ['OPEN', 'HIGH', 'LOW', 'CLOSE']
-    data_dict = preprocess_data(df, target_cols=target_cols, seq_length=SEQ_LENGTH)
+    data_dict = preprocess_data(df, target_cols=target_cols, seq_length=seq_length)
     
     train_dataset = data_dict['train_dataset']
     val_dataset = data_dict['val_dataset']
     scaler = data_dict['scaler']
     
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     
     # Model Setup
-    model = LSTMModel(input_size=4, hidden_size=HIDDEN_SIZE, num_layers=NUM_LAYERS, output_size=4)
-    model = model.to(DEVICE)
+    model = LSTMModel(input_size=4, hidden_size=hidden_size, num_layers=num_layers, output_size=output_size)
+    model = model.to(device)
     
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     # Training Loop
     best_val_loss = float('inf')
@@ -49,17 +59,15 @@ def train_model():
     val_losses = []
     
     print("Starting training...")
-    for epoch in range(EPOCHS):
+    for epoch in range(epochs):
         model.train()
         running_loss = 0.0
         for X_batch, y_batch in train_loader:
-            X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
-            
-            # Reshape inputs for LSTM [batch, seq_len, features]
+            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
             
             optimizer.zero_grad()
             outputs = model(X_batch)
-            loss = criterion(outputs, y_batch) # y_batch is [batch, 1]
+            loss = criterion(outputs, y_batch)
             loss.backward()
             optimizer.step()
             
@@ -73,7 +81,7 @@ def train_model():
         running_val_loss = 0.0
         with torch.no_grad():
             for X_batch, y_batch in val_loader:
-                X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
+                X_batch, y_batch = X_batch.to(device), y_batch.to(device)
                 outputs = model(X_batch)
                 loss = criterion(outputs, y_batch)
                 running_val_loss += loss.item()
@@ -82,32 +90,24 @@ def train_model():
         val_losses.append(avg_val_loss)
         
         if (epoch + 1) % 5 == 0:
-            print(f"Epoch [{epoch+1}/{EPOCHS}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
+            print(f"Epoch [{epoch+1}/{epochs}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}")
         
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
+            os.makedirs('results/models', exist_ok=True)
             torch.save(model.state_dict(), 'results/models/best_model.pth')
     
     print("Training complete. Best Val Loss:", best_val_loss)
     
     # Plotting training history
-    plt.figure(figsize=(10, 5))
-    plt.plot(train_losses, label='Train Loss')
-    plt.plot(val_losses, label='Validation Loss')
-    plt.title('Training and Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.savefig('results/figures/loss_history.png')
-    print("Saved results/figures/loss_history.png")
+    plot_loss(train_losses, val_losses, save_path='results/figures/loss_history.png')
     
     # Final Evaluation on Val Set
     model.load_state_dict(torch.load('results/models/best_model.pth', weights_only=True))
     model.eval()
     
     # Get all val predictions
-    # We can use the X_val from data_dict but we need to tensorify it
-    X_val = torch.FloatTensor(data_dict['X_val']).to(DEVICE)
+    X_val = torch.FloatTensor(data_dict['X_val']).to(device)
     y_val = data_dict['y_val']
     
     with torch.no_grad():
@@ -117,22 +117,22 @@ def train_model():
     preds_actual = scaler.inverse_transform(preds)
     actual_y = scaler.inverse_transform(y_val)
     
-    # Plot Actual vs Predicted for all 4 features
+    # Calculate metrics
     features = ['Open', 'High', 'Low', 'Close']
-    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
-    axes = axes.flatten()
-    
+    print("\nEvaluation Metrics:")
+    print("-" * 50)
     for i, feature in enumerate(features):
-        axes[i].plot(actual_y[:, i], label=f'Actual {feature}')
-        axes[i].plot(preds_actual[:, i], label=f'Predicted {feature}')
-        axes[i].set_title(f'VIX9D {feature} Prediction')
-        axes[i].set_xlabel('Time Steps')
-        axes[i].set_ylabel('Price')
-        axes[i].legend()
+        mae = mean_absolute_error(actual_y[:, i], preds_actual[:, i])
+        rmse = np.sqrt(mean_squared_error(actual_y[:, i], preds_actual[:, i]))
+        r2 = r2_score(actual_y[:, i], preds_actual[:, i])
+        print(f"{feature:>5} | MAE: {mae:.4f} | RMSE: {rmse:.4f} | R2: {r2:.4f}")
+    print("-" * 50)
     
-    plt.tight_layout()
-    plt.savefig('results/figures/prediction_results.png')
-    print("Saved results/figures/prediction_results.png")
+    # Plot Actual vs Predicted for all 4 features
+    plot_predictions(actual_y, preds_actual, features, save_path='results/figures/prediction_results.png')
+    
+    # Return everything needed for the notebook
+    return model, train_losses, val_losses, data_dict, scaler, actual_y, preds_actual
 
 if __name__ == "__main__":
     train_model()
