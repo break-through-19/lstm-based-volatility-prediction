@@ -48,6 +48,12 @@ The model was evaluated on the held-out validation set (20% of data). The perfor
 
 Visualizations of the loss history and prediction vs. actual plots are saved in the `results/figures/` directory.
 
+### Loss History
+<img width="1000" height="500" alt="image" src="https://github.com/user-attachments/assets/2b884869-6f02-420e-ba24-b0564471cd9d" />
+
+### Prediction results
+<img width="1500" height="1000" alt="image" src="https://github.com/user-attachments/assets/cf6ffc5e-e9b1-4723-946e-b0f73fe74619" />
+
 ## Directory Structure
 The project is modularized for better maintainability:
 ```
